@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream24 | Real-time News</title>
+    <!-- Temporary Tailwind CDN for rapid prototyping -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        navy: '#1a202c', // Specific Navy Blue requested
+                    },
+                    fontFamily: {
+                        // Sans-serif body stack
+                        sans: ['Inter', 'Open Sans', 'Calibri', 'sans-serif'],
+                        // Bold heading stack
+                        heading: ['Montserrat', 'Segoe UI', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .bento-grid {
+                @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-[280px];
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-navy p-4 shadow-lg sticky top-0 z-40 flex flex-wrap justify-between items-center border-b border-gray-800">
+        <div class="flex items-center">
+            <h1 class="text-3xl font-heading font-extrabold text-white tracking-wide">Stream<span class="text-blue-500">24</span></h1>
+        </div>
+
+        <!-- Live Utility Widget -->
+        <div class="flex items-center space-x-4 bg-gray-800/80 px-5 py-2.5 rounded-xl border border-gray-700 shadow-inner mt-4 sm:mt-0">
+            <!-- Weather Placeholder -->
+            <div id="weather-widget" class="flex items-center space-x-2 cursor-pointer" title="Tacoma, WA Weather">
+                <span class="text-xl" id="weather-icon">☁️</span>
+                <span class="text-sm font-semibold text-gray-200" id="weather-temp">--°F</span>
+            </div>
+            <div class="h-6 w-px bg-gray-600"></div>
+            <!-- Clock Widget -->
+            <div id="clock-widget" class="text-sm font-heading font-bold text-blue-400 w-20 text-center">
+                --:-- --
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-6 lg:p-10">
+        
+        <!-- Category Filters -->
+        <nav class="mb-10 flex flex-wrap gap-3">
+            <button class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded-full text-sm font-semibold transition shadow">Top Stories</button>
+            <button class="px-5 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-sm font-semibold transition border border-gray-700">Geopolitics</button>
+            <button class="px-5 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-sm font-semibold transition border border-gray-700">USA Policy</button>
+            <button class="px-5 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-sm font-semibold transition border border-gray-700">Global News</button>
+            <button class="px-5 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-sm font-semibold transition border border-gray-700">Cricket</button>
+            <button class="px-5 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-sm font-semibold transition border border-gray-700">Washington Local News</button>
+            <button class="px-5 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-sm font-semibold transition border border-gray-700">Tech</button>
+        </nav>
+
+        <!-- Bento Grid -->
+        <div class="bento-grid">
+            
+            <!-- Dynamic News Cards -->
+            <% if (typeof newsItems !== 'undefined' && newsItems.length > 0) { %>
+                <% newsItems.forEach(item => { 
+                    let borderColor = 'border-gray-700';
+                    let textColor = 'text-blue-400';
+                    switch(item.category) {
+                        case 'Tech': borderColor = 'border-t-blue-500'; textColor = 'text-blue-500'; break;
+                        case 'Cricket': borderColor = 'border-t-green-500'; textColor = 'text-green-500'; break;
+                        case 'Geopolitics': borderColor = 'border-t-red-500'; textColor = 'text-red-500'; break;
+                        case 'Top Stories': borderColor = 'border-t-yellow-500'; textColor = 'text-yellow-500'; break;
+                        case 'USA Policy': borderColor = 'border-t-purple-500'; textColor = 'text-purple-500'; break;
+                        case 'Global News': borderColor = 'border-t-teal-500'; textColor = 'text-teal-500'; break;
+                        case 'Washington Local News': borderColor = 'border-t-orange-500'; textColor = 'text-orange-500'; break;
+                    }
+                    
+                    const dateObj = new Date(item.pubDate);
+                    const formattedDate = dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                %>
+                <article class="bg-gray-800 rounded-3xl p-6 border border-gray-700 border-t-4 <%= borderColor %> hover:border-blue-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] transition-all duration-300 flex flex-col justify-between col-span-1 lg:col-span-2 row-span-1">
+                    <div>
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="text-xs <%= textColor %> font-bold uppercase tracking-widest"><%= item.category %></span>
+                            <span class="text-xs text-gray-400 font-medium"><%= formattedDate %> • <%= item.source %></span>
+                        </div>
+                        <h2 class="text-xl md:text-2xl font-heading font-bold mb-3 text-white line-clamp-2 leading-tight"><%= item.title %></h2>
+                        <p class="text-sm text-gray-400 line-clamp-3 leading-relaxed"><%= item.summary %></p>
+                    </div>
+                    <div class="mt-4">
+                        <button onclick="openModal(this)" data-title="<%= item.title %>" data-category="<%= item.category %>" data-summary="<%= item.summary %>" data-link="<%= item.link %>" class="text-sm bg-gray-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors w-max">
+                            Read More &rarr;
+                        </button>
+                    </div>
+                </article>
+                <% }) %>
+            <% } %>
+            
+        </div>
+    </main>
+
+    <!-- Read More Modal / Drawer -->
+    <div id="readMoreModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 backdrop-blur-sm p-4 transition-opacity">
+        <div class="bg-navy w-full max-w-2xl rounded-3xl p-8 border border-gray-700 shadow-2xl relative">
+            <button onclick="closeModal()" class="absolute top-6 right-6 text-gray-400 hover:text-white transition bg-gray-800 hover:bg-gray-700 p-2 rounded-full leading-none">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div class="mb-6 pr-8">
+                <span class="text-xs text-blue-400 font-bold uppercase tracking-widest block mb-2" id="modalCategory">Category</span>
+                <h3 class="text-2xl font-heading font-bold text-white leading-tight" id="modalTitle">Article Headline Appears Here</h3>
+            </div>
+            <p class="text-gray-300 text-base leading-relaxed mb-8" id="modalSummary">The full, unabridged summary from the RSS feed will be displayed here, allowing the user to get all the context they need before deciding to visit the actual source link.</p>
+            <div class="flex justify-end border-t border-gray-800 pt-6">
+                <a href="#" id="modalLink" target="_blank" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold transition shadow-lg shadow-blue-500/30">
+                    Read Original Article
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Local Clock Logic for Tacoma, WA (Pacific Time)
+        function updateClock() {
+            const now = new Date();
+            const options = { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true };
+            document.getElementById('clock-widget').textContent = now.toLocaleTimeString('en-US', options);
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Modal Interactivity
+        function openModal(btn) { 
+            document.getElementById('modalCategory').textContent = btn.getAttribute('data-category');
+            document.getElementById('modalTitle').textContent = btn.getAttribute('data-title');
+            document.getElementById('modalSummary').textContent = btn.getAttribute('data-summary');
+            document.getElementById('modalLink').href = btn.getAttribute('data-link');
+            document.getElementById('readMoreModal').classList.replace('hidden', 'flex'); 
+        }
+        function closeModal() { document.getElementById('readMoreModal').classList.replace('flex', 'hidden'); }
+    </script>
+</body>
+</html>
