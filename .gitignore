@@ -1,0 +1,13 @@
+# Dependency directories
+node_modules/
+
+# Environment variables
+.env
+
+# Local Database files
+database.sqlite
+stream24.db
+
+# OS generated files
+.DS_Store
+Thumbs.db

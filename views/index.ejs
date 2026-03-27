@@ -10,6 +10,7 @@
         h1, h2, h3 { font-family: 'Segoe UI', sans-serif; }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .tick-flash { transition: color 0.3s ease; }
     </style>
 </head>
 <body class="bg-slate-900 text-gray-200 min-h-screen">
@@ -22,10 +23,20 @@
             <p class="text-xs text-slate-400 mt-1 uppercase tracking-widest">Global Intelligence</p>
         </div>
         
-        <div class="text-right">
+        <div class="text-right flex flex-col items-end">
             <p class="text-2xl font-semibold text-white tracking-wide" id="clock">--:-- --</p>
+            <p class="text-sm font-medium flex items-center gap-2 mt-1" id="weatherWidget">
+                <span>⏳</span> <span class="text-slate-400">Loading Weather...</span>
+            </p>
         </div>
     </header>
+
+    <div class="bg-slate-950 border-b border-slate-800 px-8 py-2 overflow-hidden flex whitespace-nowrap text-xs font-mono items-center shadow-inner">
+        <span class="text-slate-500 font-bold mr-6 uppercase tracking-widest flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Markets
+        </span>
+        <div id="ticker" class="flex gap-6"></div>
+    </div>
 
     <nav class="bg-slate-800/50 p-4 border-b border-slate-700 flex flex-wrap gap-4 items-center justify-between px-8">
         <div class="flex gap-2 items-center">
@@ -59,17 +70,32 @@
                         <div>
                             <div class="flex justify-between items-start mb-3">
                                 <span class="text-xs font-bold text-blue-400 uppercase tracking-wider"><%= item.category %></span>
-                                <button onclick="saveArticle('<%= item.link %>', `<%= item.title.replace(/'/g, '&apos;').replace(/"/g, '&quot;') %>`, '<%= item.category %>')" class="text-slate-500 hover:text-yellow-400 transition" title="Save for later">📌</button>
+                                <button 
+                                    data-link="<%= item.link %>" 
+                                    data-title="<%= item.title %>" 
+                                    data-category="<%= item.category %>"
+                                    onclick="saveArticle(this)" 
+                                    class="text-slate-500 hover:text-yellow-400 transition" 
+                                    title="Save for later">📌</button>
                             </div>
                             <h3 class="text-lg font-bold text-white leading-tight mb-2"><%= item.title %></h3>
                             <p class="text-sm text-slate-400 line-clamp-3 mb-4"><%= item.summary %></p>
                         </div>
                         
                         <div class="flex justify-between items-center mt-4 pt-4 border-t border-slate-700">
-                            <button onclick="openModal(`<%= item.title.replace(/'/g, '&apos;').replace(/"/g, '&quot;') %>`, `<%= item.summary.replace(/'/g, '&apos;').replace(/"/g, '&quot;') %>`, '<%= item.link %>')" class="text-sm text-blue-400 hover:text-blue-300 font-semibold">Read More →</button>
+                            <button 
+                                data-title="<%= item.title %>" 
+                                data-summary="<%= item.summary %>" 
+                                data-link="<%= item.link %>"
+                                onclick="openModal(this)" 
+                                class="text-sm text-blue-400 hover:text-blue-300 font-semibold">Read More →</button>
                         </div>
                     </div>
                 <% }) %>
+            <% } else { %>
+                <div class="col-span-full p-12 text-center bg-slate-800 rounded-xl border border-slate-700">
+                    <p class="text-xl text-slate-400">No news found. The backend is fetching data...</p>
+                </div>
             <% } %>
         </div>
     </main>
@@ -88,10 +114,7 @@
         <div class="bg-slate-800 p-8 rounded-xl max-w-md w-full border border-slate-700 relative shadow-2xl">
             <button onclick="closeSaved()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl font-bold">&times;</button>
             <h2 class="text-xl font-bold text-white mb-6 pr-6">📌 Saved Articles</h2>
-            
-            <div id="savedList" class="flex flex-col gap-3 max-h-96 overflow-y-auto pr-2 mb-4">
-                </div>
-
+            <div id="savedList" class="flex flex-col gap-3 max-h-96 overflow-y-auto pr-2 mb-4"></div>
             <button onclick="clearSaved()" class="w-full px-4 py-2 bg-red-600/20 text-red-500 border border-red-600/50 hover:bg-red-600/30 rounded-lg text-sm font-semibold transition">Clear All Bookmarks</button>
         </div>
     </div>
@@ -102,29 +125,80 @@
             document.getElementById('clock').innerText = new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'});
         }, 1000);
 
-        // Filter Logic & Button Highlighting
+        // Weather Fetcher (Seattle)
+        async function fetchWeather() {
+            try {
+                const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=47.6062&longitude=-122.3321&current=temperature_2m,rain,snowfall&temperature_unit=fahrenheit');
+                const data = await res.json();
+                
+                const temp = Math.round(data.current.temperature_2m);
+                let icon = '🌤️';
+                if (data.current.snowfall > 0) icon = '❄️';
+                else if (data.current.rain > 0) icon = '🌧️';
+                
+                document.getElementById('weatherWidget').innerHTML = `
+                    <span class="text-xl">${icon}</span> 
+                    <span class="text-white font-bold">${temp}°F</span> 
+                    <span class="text-slate-500 ml-1">| Seattle, WA</span>
+                `;
+            } catch (error) {
+                document.getElementById('weatherWidget').innerHTML = `<span class="text-slate-500">Weather Unavailable</span>`;
+            }
+        }
+        fetchWeather();
+        setInterval(fetchWeather, 15 * 60 * 1000);
+
+        // Secure Market Engine (Talking to your backend, NOT Finnhub directly)
+        let liveStocks = [];
+
+        function renderTicker() {
+            const container = document.getElementById('ticker');
+            if (liveStocks.length === 0) {
+                container.innerHTML = '<span class="text-slate-500">Loading Markets...</span>';
+                return;
+            }
+            container.innerHTML = liveStocks.map(s => {
+                const isUp = s.change >= 0;
+                const colorClass = isUp ? 'text-green-500' : 'text-red-500';
+                const arrow = isUp ? '▲' : '▼';
+                return `<div class="flex items-center gap-2 tick-flash">
+                            <span class="text-slate-400 font-bold">${s.sym}</span>
+                            <span class="text-white">${s.price.toFixed(2)}</span>
+                            <span class="${colorClass}">${arrow} ${Math.abs(s.change).toFixed(2)}</span>
+                        </div>`;
+            }).join('<span class="text-slate-800 px-2">|</span>');
+        }
+
+        async function fetchLiveStocks() {
+            try {
+                const res = await fetch('/api/stocks');
+                liveStocks = await res.json();
+                renderTicker();
+            } catch (error) {
+                console.error("Market feed interrupted:", error);
+            }
+        }
+
+        renderTicker();
+        fetchLiveStocks();
+        setInterval(fetchLiveStocks, 15000); // 15 seconds to respect free tier
+
+        // Filters, Search, Modals, and LocalStorage logic below
         function filterCategory(category) {
-            // 1. Reset all buttons to gray
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.classList.remove('bg-blue-600', 'text-white');
                 btn.classList.add('bg-slate-700');
             });
-            
-            // 2. Highlight the clicked button blue
             const activeBtn = document.querySelector(`.filter-btn[data-btn="${category}"]`);
             if(activeBtn) {
                 activeBtn.classList.remove('bg-slate-700');
                 activeBtn.classList.add('bg-blue-600', 'text-white');
             }
-
-            // 3. Highlight dropdown if a sport is selected
             const dropdown = document.getElementById('sportsDropdown');
             if(['Sports', 'Cricket', 'NFL', 'NBA', 'MLB'].includes(category)) {
                  dropdown.classList.remove('bg-slate-700');
                  dropdown.classList.add('bg-blue-600', 'text-white');
             }
-
-            // 4. Filter the actual cards
             const cards = document.querySelectorAll('.news-card');
             cards.forEach(card => {
                 const cardCat = card.getAttribute('data-category');
@@ -136,7 +210,6 @@
             });
         }
 
-        // Live Search
         document.getElementById('searchInput').addEventListener('keyup', (e) => {
             const term = e.target.value.toLowerCase();
             const cards = document.querySelectorAll('.news-card');
@@ -146,11 +219,10 @@
             });
         });
 
-        // Modals
-        function openModal(title, summary, link) {
-            document.getElementById('modalTitle').innerText = title;
-            document.getElementById('modalContent').innerHTML = summary || 'No summary provided by source.';
-            document.getElementById('modalLink').href = link;
+        function openModal(btn) {
+            document.getElementById('modalTitle').innerText = btn.getAttribute('data-title');
+            document.getElementById('modalContent').innerHTML = btn.getAttribute('data-summary') || 'No summary provided by source.';
+            document.getElementById('modalLink').href = btn.getAttribute('data-link');
             document.getElementById('readModal').classList.remove('hidden');
             document.getElementById('readModal').classList.add('flex');
         }
@@ -160,8 +232,10 @@
             document.getElementById('readModal').classList.remove('flex');
         }
 
-        // Saved Articles Logic
-        function saveArticle(link, title, category) {
+        function saveArticle(btn) {
+            const link = btn.getAttribute('data-link');
+            const title = btn.getAttribute('data-title');
+            const category = btn.getAttribute('data-category');
             let saved = JSON.parse(localStorage.getItem('stream24_saved') || '[]');
             if (!saved.some(item => item.link === link)) {
                 saved.push({ link, title, category });
@@ -174,12 +248,10 @@
             let saved = JSON.parse(localStorage.getItem('stream24_saved') || '[]');
             const container = document.getElementById('savedList');
             container.innerHTML = '';
-
             if (saved.length === 0) {
                 container.innerHTML = '<p class="text-slate-400 text-sm">You have not saved any articles yet.</p>';
             } else {
                 saved.forEach(item => {
-                    // Create clickable UI cards for the modal
                     container.innerHTML += `
                         <a href="${item.link}" target="_blank" class="block p-4 bg-slate-900 border border-slate-700 hover:border-blue-500 rounded-lg transition group">
                             <span class="text-xs text-blue-400 font-bold block mb-1 uppercase tracking-wider">${item.category}</span>
@@ -188,7 +260,6 @@
                     `;
                 });
             }
-            
             document.getElementById('savedModal').classList.remove('hidden');
             document.getElementById('savedModal').classList.add('flex');
         }
@@ -201,7 +272,7 @@
         function clearSaved() {
             if(confirm("Delete all saved articles?")) {
                 localStorage.removeItem('stream24_saved');
-                openSaved(); // refresh the modal UI
+                openSaved();
             }
         }
     </script>
